@@ -5,12 +5,11 @@ sys.path.append(os.getcwd())
 
 import numpy
 import pandas
-import os
 import gc
-from HelperScriptsPY import helper_functions
 import time
 import tensorflow as tf
 import matplotlib.pyplot as plt
+from HelperScriptsPY import helper_functions
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, roc_auc_score, auc, roc_curve
 from sklearn.utils import shuffle
