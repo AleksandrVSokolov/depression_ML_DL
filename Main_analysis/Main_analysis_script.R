@@ -830,7 +830,8 @@ Combined_Mval = Combined_Mval[,Combined_pheno$ID]
 all(colnames(Combined_Mval) == Combined_pheno$ID) # TRUE
 
 ################### Saving merged data ###################
-
+SAVING_merged = FALSE
+       
 if (SAVING_merged){
   fwrite(Combined_Mval,file="Combined_Mval_non_adj.csv", sep = ",", row.names = TRUE) 
   fwrite(Combined_pheno,file="Combined_pheno_init.csv", sep = ",") 
