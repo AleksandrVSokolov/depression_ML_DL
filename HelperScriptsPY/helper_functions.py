@@ -14,7 +14,14 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_recall_fscore_support
 
 # A function to make confusion matrix
-def make_confusion_matrix(y_true, y_pred, classes=None, figsize=(10, 10), text_size=15, norm=False, savefig=False, figname ="confusion_matrix.png"): 
+def make_confusion_matrix(y_true, 
+                          y_pred, 
+                          classes=None, 
+                          figsize=(10, 10), 
+                          text_size=15, 
+                          norm=False, 
+                          savefig=False,
+                          figname="confusion_matrix.png"): 
   """Makes a labelled confusion matrix comparing predictions and ground truth labels.
 
   If classes is passed, confusion matrix will be labelled, if not, integer class values
@@ -206,7 +213,7 @@ def load_DNA_methylation_data(select_cpg="ALL",
     ordered_illum_annot = ordered_illum_annot.to_pandas()
     ordered_illum_annot.set_index('C0', inplace=True)
 
-    if select_cpg != "ALL":
+    if ".txt" in select_cpg:
       # CpGs
       print("Reading CpG list and selecting CpGs")
       CpG_list_path = cpg_folder + select_cpg
@@ -389,41 +396,3 @@ def plot_roc_curve(fpr, tpr, auc, path):
     plt.savefig(path, dpi=300)
     plt.close()
 
-def select_features_R_limma(train_methyl,
-                            train_pheno,
-                            CpG_names,
-                            current_fold,
-                            base_dir,
-                            command = "Rscript",
-                            path2script ="/HelperScriptsPY/RunLimmaMatrix.R",
-                            feature_number = 50):
-
-  # Writing Limma inputs                      
-  pheno_path = base_dir + "/pheno_" + current_fold + ".csv"
-  meth_path = base_dir + "/meth_" + current_fold + ".csv"
-  toptable_path = base_dir + "/TopTable_" + current_fold + ".csv"
-
-  # Saving things 
-  train_pheno.to_csv(pheno_path)
-  train_methyl = datatable.Frame(train_methyl)
-  train_methyl.names = CpG_names
-  train_methyl.to_csv(meth_path)
-
-  # Running Limma inside R
-  args = [base_dir, pheno_path, meth_path, toptable_path]
-  cmd = [command, path2script] + args
-  subprocess.run(cmd)
-
-  # Removing junk
-  os.remove(pheno_path)
-  os.remove(meth_path)
-
-  # Selecting features
-  toptable = pandas.read_csv(toptable_path)
-  top_features = toptable["CpG"].values[range(feature_number)]
-     
-
-  selection_idx = train_methyl.names
-  selection_idx = [True if x in top_features else False for x in selection_idx]
-  return selection_idx
-  

@@ -1491,11 +1491,135 @@ overlapping_CpGs = list(
 make_Venn_digram_list(overlapping_CpGs, plot_full_path = "CpG_by_analysis.pdf", palette = 7)
 intersecting_CpGs = Reduce(intersect, overlapping_CpGs)
 
-################### Run GO encrichment analysis ###################
+ILLUM_450K_ANNOT_selected_intersect = ILLUM_450K_ANNOT_selected[ILLUM_450K_ANNOT_selected$Name %in% intersecting_CpGs,]
+ILLUM_450K_ANNOT_selected_intersect_AHRR = ILLUM_450K_ANNOT_selected_intersect[stri_detect_fixed(ILLUM_450K_ANNOT_selected_intersect$Updated_gene_name, 
+                                                                                                 pattern = "AHRR"),] # 0 CpGs
+
+################### GO enrichment analysis ###################
 enrichment_FINAL = missMethyl::gometh(sig.cpg = intersecting_CpGs, all.cpg = Top_table$CpG)
 enrichment_FINAL = enrichment_FINAL[enrichment_FINAL$ONTOLOGY == "BP", ]
 enrichment_FINAL = arrange(enrichment_FINAL, P.DE)
 write.csv(enrichment_FINAL, "GO_BP_enrichment_overlap.csv", row.names = FALSE)
+
+
+################### Regulatory chromatin enrichment ###################
+# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4530010/ Human 111 reference epigenomes
+# https://egg2.wustl.edu/roadmap/web_portal/chr_state_learning.html#core_15state
+# E073 Pre-frontal cortex, E062 Primary mononuclear cells (blood)
+ILLUM_450K_ANNOT_selected_chrom_state = ILLUM_450K_ANNOT_selected
+ENCODE_15st_cortex = fread("/home/aleksandr/Desktop/WORK/Depression_methylation_multicohort_meta/HGNC/15_state_model/E073_15_coreMarks_mnemonics.bed")
+ENCODE_15st_PBMC = fread("/home/aleksandr/Desktop/WORK/Depression_methylation_multicohort_meta/HGNC/15_state_model/E062_15_coreMarks_mnemonics.bed")
+
+indeces = 1:nrow(ILLUM_450K_ANNOT_selected_chrom_state)
+annot_chrom_states = mclapply(indeces, function(i){
+  
+  cpg = ILLUM_450K_ANNOT_selected_chrom_state$Name[i]
+  chrom = ILLUM_450K_ANNOT_selected_chrom_state$chr[i]
+  pos = ILLUM_450K_ANNOT_selected_chrom_state$pos[i]
+  
+  # select target sets
+  target_blood = ENCODE_15st_PBMC[ENCODE_15st_PBMC$V1 == chrom,]
+  target_cortex = ENCODE_15st_cortex[ENCODE_15st_cortex$V1 == chrom,]
+  
+  # select specified data
+  target_blood = target_blood[target_blood$V2 <= pos & target_blood$V3 >= pos,]
+  target_cortex = target_cortex[target_cortex$V2 <= pos & target_cortex$V3 >= pos,]
+  
+  # selecting unique or the first value
+  target_blood = unique(target_blood$V4)
+  target_cortex = unique(target_cortex$V4)
+  target_blood = target_blood[1]
+  target_cortex = target_cortex[1]
+  
+  df = data.frame(cpg = cpg, St15_blood = target_blood, St15_cortex = target_cortex)
+  
+  return(df)
+  
+}, mc.cores = 10)
+annot_chrom_states = list_to_df(annot_chrom_states)
+all(ILLUM_450K_ANNOT_selected_chrom_state$Name == annot_chrom_states$cpg) # Order is matching
+ILLUM_450K_ANNOT_selected_chrom_state$St15_blood = annot_chrom_states$St15_blood
+ILLUM_450K_ANNOT_selected_chrom_state$St15_cortex = annot_chrom_states$St15_cortex
+write.csv(ILLUM_450K_ANNOT_selected_chrom_state, "ILLUM_450K_ANNOT_selected_chrom_state.csv", row.names = FALSE)
+
+
+# Enrichemnt
+ChromToCpG_blood = ILLUM_450K_ANNOT_selected_chrom_state[,c("St15_blood", "Name")]
+ChromToCpG_cortex = ILLUM_450K_ANNOT_selected_chrom_state[,c("St15_cortex", "Name")]
+CpG_set = as.character(intersecting_CpGs)
+CpG_universe = ILLUM_450K_ANNOT_selected_chrom_state$Name
+
+# Up-methylated CpGs and Down-methylated CpGs (in cases)
+CpG_set_up = CpG_set[CpG_set %in% model_outputs_meta_df_signif[model_outputs_meta_df_signif$meta_LFc > 0, "CpG"]]
+CpG_set_down = CpG_set[CpG_set %in% model_outputs_meta_df_signif[model_outputs_meta_df_signif$meta_LFc < 0, "CpG"]]
+
+# Up
+Chrom_blood_enrichment = enricher(gene = CpG_set_up, 
+                               TERM2GENE = ChromToCpG_blood,
+                               minGSSize = 1, 
+                               maxGSSize = 1e7)
+Chrom_blood_enrichment_result = Chrom_blood_enrichment@result
+Chrom_blood_enrichment_result$tissue = "Primary mononuclear cells from peripheral blood"
+Chrom_blood_enrichment_result$change = "Increased methylation in depressed"
+
+Chrom_cortex_enrichment = enricher(gene = CpG_set_up, 
+                                  TERM2GENE = ChromToCpG_cortex,
+                                  minGSSize = 1, 
+                                  maxGSSize = 1e7)
+Chrom_cortex_enrichment_result = Chrom_cortex_enrichment@result
+Chrom_cortex_enrichment_result$tissue = "Brain Dorsolateral Prefrontal Cortex"
+Chrom_cortex_enrichment_result$change = "Increased methylation in depressed"
+
+# Down
+Chrom_blood_enrichment_down = enricher(gene = CpG_set_down, 
+                                  TERM2GENE = ChromToCpG_blood,
+                                  minGSSize = 1, 
+                                  maxGSSize = 1e7)
+Chrom_blood_enrichment_result_down = Chrom_blood_enrichment_down@result
+Chrom_blood_enrichment_result_down$tissue = "Primary mononuclear cells from peripheral blood"
+Chrom_blood_enrichment_result_down$change = "Decreased methylation in depressed"
+
+Chrom_cortex_enrichment_down = enricher(gene = CpG_set_down, 
+                                   TERM2GENE = ChromToCpG_cortex,
+                                   minGSSize = 1, 
+                                   maxGSSize = 1e7)
+Chrom_cortex_enrichment_result_down = Chrom_cortex_enrichment_down@result
+Chrom_cortex_enrichment_result_down$tissue = "Brain Dorsolateral Prefrontal Cortex"
+Chrom_cortex_enrichment_result_down$change = "Decreased methylation in depressed"
+
+# Description for Chromatin states from https://egg2.wustl.edu/roadmap/web_portal/chr_state_learning.html#core_15state
+content = read_html("https://egg2.wustl.edu/roadmap/web_portal/chr_state_learning.html#core_15state")
+tables = content %>% html_table(fill = TRUE)
+description_15st = tables[[1]]
+description_15st$MNEMONIC = paste0(description_15st$`STATE NO.`, "_", description_15st$MNEMONIC)
+# prepare enrichment results 
+chrom_enrich_list = list(
+  Chrom_blood_enrichment_result,
+  Chrom_cortex_enrichment_result,
+  Chrom_blood_enrichment_result_down,
+  Chrom_cortex_enrichment_result_down
+)
+chrom_enrich_list = lapply(chrom_enrich_list, function(x){
+  
+  colnames(x) = c("State",
+                  "Description",
+                  "SetRatio",
+                  "BgRatio",
+                  "pvalue",
+                  "p.adjust",
+                  "qvalue",
+                  "CpGs",
+                  "Count",
+                  "tissue",
+                  "change")
+  
+  x$Description = sapply(x$Description, function(z){
+    z = description_15st[description_15st$MNEMONIC == z, "DESCRIPTION"]
+    return(z)
+  })
+  return(x)
+})
+chrom_enrich_list = list_to_df(chrom_enrich_list)
 
 
 ################### eQTM analysis ###################
@@ -1559,12 +1683,13 @@ enrichment_EQTM = enrichment_EQTM[enrichment_EQTM$ONTOLOGY == "BP", ]
 enrichment_EQTM = arrange(enrichment_EQTM, P.DE)
 write.csv(enrichment_FINAL, "GO_BP_enrichment_overlap_eQTM.csv", row.names = FALSE)
 
-
+################### Saving biol. analysis ###################
 # combining files
 results_biology = list("Enrichment_BP_init" = enrichment_FINAL,
                        "Gene_CpG_eQTM" = eQTMs_selected,
                        "Gene_CpG_eQTM_freq" = freq_gene,
-                       "Enrichment_BP_eQTM" = enrichment_EQTM)
+                       "Enrichment_BP_eQTM" = enrichment_EQTM,
+                       "Enrichment_chrom_states" = chrom_enrich_list)
 openxlsx::write.xlsx(results_biology, "results_biology.xlsx", overwrite = TRUE)
 
 ################### Generate phenotypes table for cohorts ###################
@@ -1675,4 +1800,86 @@ non_harm_data_test = openxlsx::read.xlsx("/home/aleksandr/Desktop/WORK/Depressio
 harm_data_test$Model == non_harm_data_test$Model
 auc_gain_test = non_harm_data_test$`AUC.(last.hold-out)`-   harm_data_test$`AUC.(last.hold-out)`
 mean(auc_gain_test) # 0.1680625
+
+################### Sensitivity analysis for meta with smoking ###################
+
+# Generate beta values and pheno for smoking estimation
+phenos_smoking = Combined_pheno_no_NA
+phenos_smoking$sex = ifelse(phenos_smoking$Sex == "Male", 1,2)
+phenos_smoking$Sex = NULL
+
+library(EpiSmokEr)
+smoking_datasets = list()
+
+# Calculating smoking score using Elliott et al. 2014
+# Data has from 158 to 172 of 187 CpGs, initially reported by Zellinger et al. 2013
+
+mapping = c(
+  "PSY_SCR_mval",
+  "PSY_RC_mval",
+  "GSE125105_MPIP_mval",
+  "GSE72680_GRADY_mval",
+  "GSE113725_RDE_mval",
+  "GSE198904_DHRC_mval",
+  "GSE198904_OBS_mval",
+  "GSE74414_MPIP2_mval"
+)
+names(mapping) = unique(as.character(phenos_smoking$Study))
+
+for (i in 1:length(unique(phenos_smoking$Study))){
+  cohort = unique(as.character(phenos_smoking$Study))[i]
+  print(cohort)
+  curr_df = phenos_smoking[phenos_smoking$Study == cohort, ]
+  
+  # Selecting methylation dataset and beta values
+  mvals = get(mapping[cohort])
+  mvals = mvals[,curr_df$ID]
+  print("Mapping correct:")
+  print(base::all(colnames(mvals) == curr_df$ID))
+  curr_beta = m2beta(mvals)
+  
+  rownames(curr_df) = curr_df$ID
+  smoke_status = epismoker(dataset=curr_beta, samplesheet = curr_df, method = "SSc")
+  smoking_datasets[[i]] = smoke_status
+  
+}
+smoking_datasets = list_to_df(smoking_datasets)
+base::all(smoking_datasets$SampleName == phenos_smoking$ID) # EpiSmokEr overwrites method all!?
+
+detach("package:EpiSmokEr", unload=TRUE)
+
+all(smoking_datasets$SampleName == phenos_smoking$ID) # Now all correctly works
+
+phenos_smoking$smoking_score = smoking_datasets$smokingScore
+# treshold 17.55 https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3915234/
+phenos_smoking$above_treshold = ifelse(phenos_smoking$smoking_score > 17.55, "Above", "Below")
+table(phenos_smoking$above_treshold, phenos_smoking$Study) # Potentially only 4 participants GSE125105_MPIP are smokers based on European Threshold
+
+# treshold 11.79 for Asian population
+phenos_smoking$above_treshold_strict = ifelse(phenos_smoking$smoking_score > 11.79, "Above", "Below")
+table(phenos_smoking$above_treshold_strict) # Only 44 participants are above strict threshold
+44/1942 #0.02265705 Potentially only 2% of the sample are smokers
+
+plot = ggplot(data = phenos_smoking, aes(x = Study, y = smoking_score)) +
+  geom_boxplot() +
+  geom_hline(yintercept = 17.55, col="red") +
+  geom_hline(yintercept = 11.79, col="blue") +
+  labs(y = "Estimated smoking score (Elliott H. 2014)", x = "Cohort-batch") +
+  ggtitle("Estimated smoking score vs cohort-batch (cohort-level preprocessing)") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0.5),
+        strip.text.y = element_text(angle = 45, size = 8),
+        strip.background = element_blank(),
+        panel.background = element_blank(),
+        axis.ticks = element_line(linewidth = 1, color = "black"),
+        panel.grid = element_line(linewidth = 0.25, color = "black", linetype = 2),
+        axis.text.y = element_text(face = "bold"))
+
+plot
+pdf(file = "Fig S5.pdf", width = 10,height = 8)
+plot
+dev.off()
+
+
+
+
 
