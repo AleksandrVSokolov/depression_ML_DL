@@ -15,6 +15,18 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, roc_auc_score, auc, roc_curve
 from sklearn.utils import shuffle
 from Models.ClassifierModels import innerDNNClassifier
+from Models.FeatureSelectors import (
+    select_features_R_limma, 
+    selector_variance, 
+    selector_variance_5, 
+    selector_variance_1, 
+    selector_variance_01,
+    selector_k_best_f_200,
+    selector_lin_svc_200, 
+    selector_log_reg_200, 
+    selector_trees_200
+)
+
 
 """
 Example code:
@@ -38,6 +50,14 @@ cd /home/aleksandr/Desktop/WORK/Depression_methylation_multicohort_meta
     "tanh" "tanh" "linear" 0.0001 "ALL" "Mval" "squared_hinge" "mean_squared_error" 0.1 "no_BN" "l1_l2" \
         "Not_save" 128 "Optimization" "all_cohorts" 200 "Main_analysis/ML_data/"
 
+
+Example code with selectors:
+
+conda activate tf-py38
+cd /home/aleksandr/Desktop/WORK/Depression_methylation_multicohort_meta
+/home/aleksandr/miniconda3/envs/tf-py38/bin/python TrainCV_JointAE.py  "innerDNNClassifier" "test_folder_jointAE" 550 3 0.3 \
+    "tanh" "tanh" "linear" 0.0001 "selector_variance_5" "Mval" "squared_hinge" "mean_squared_error" 0.1 "no_BN" "l1_l2" \
+        "Not_save" 128 "Optimization" "all_cohorts" 200 "Main_analysis/ML_data/"
 """
 
 #### Parsing arguments ####
@@ -211,6 +231,21 @@ for gpu in gpus:
 #################################################################################
 ##########################    Section    ########################################
 #################################################################################
+# Preparing feature selectors
+selector_dict = {
+    "selector_variance_5":selector_variance_5, 
+    "selector_variance_1":selector_variance_1, 
+    "selector_variance_01":selector_variance_01,
+    "selector_k_best_f_200":selector_k_best_f_200,
+    "selector_lin_svc_200":selector_lin_svc_200, 
+    "selector_log_reg_200":selector_log_reg_200, 
+    "selector_trees_200":selector_trees_200
+}
+
+
+#################################################################################
+##########################    Section    ########################################
+#################################################################################
 # Defining classification loss
 if CLASS_LOSS_ARG == "binary_crossentropy":
     print("Using BCE loss for classification")
@@ -279,7 +314,7 @@ def run_TF_model(X_train,
         base_wd = os.getcwd()
         full_path_for_R = base_wd + "/" + dir_path
         full_path_R_script = base_wd + "/HelperScriptsPY/RunLimmaMatrix.R"
-        selection_logical = helper_functions.select_features_R_limma(
+        selection_logical = select_features_R_limma(
             train_methyl = X_train,
             train_pheno = curr_depr_pheno_train,
             CpG_names = CpG_names,
@@ -295,6 +330,20 @@ def run_TF_model(X_train,
         
     elif CONSIST_ARG == "ALL_keep":
         print("All CpGs were imported but no selection requested")
+
+    elif CONSIST_ARG in selector_dict.keys():
+        base_wd = os.getcwd()
+        full_path_for_R = base_wd + "/" + dir_path
+        selection_logical = selector_dict[CONSIST_ARG](train_methyl=X_train,
+                                                       train_pheno=curr_depr_pheno_train["depr_one_hot"],
+                                                       CpG_names=CpG_names,
+                                                       current_fold=current_fold,
+                                                       base_dir=full_path_for_R)
+        X_train = X_train[:,selection_logical]
+        X_test = X_test[:,selection_logical]
+
+        print(f"Selected training shape: {X_train.shape}")
+        print(f"Selected testing shape: {X_test.shape}")
 
     else:
         print("CpGs were provided from a list -> no selection with limma")

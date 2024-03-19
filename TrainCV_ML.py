@@ -14,7 +14,17 @@ from sklearn import svm
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.linear_model import LogisticRegression
-
+from Models.FeatureSelectors import (
+    select_features_R_limma, 
+    selector_variance, 
+    selector_variance_5, 
+    selector_variance_1, 
+    selector_variance_01,
+    selector_k_best_f_200,
+    selector_lin_svc_200, 
+    selector_log_reg_200, 
+    selector_trees_200
+)
 
 """
 # Classifiers:     
@@ -34,18 +44,31 @@ Example commands:
 
 conda activate tf-py38
 cd /home/aleksandr/Desktop/WORK/Depression_methylation_multicohort_meta
-/home/aleksandr/miniconda3/envs/tf-py38/bin/python TrainCV_ML.py  "RandomForest" "test_folder_ML" 3 \
-    "ALL" "Mval" "Optimization" "all_cohorts" 20 "Main_analysis/ML_data/"
+/home/aleksandr/miniconda3/envs/tf-py38/bin/python TrainCV_ML_2.py  "SVM_c" "test_folder_ML" 3 \
+    "Top_200_all_consistent_CpGs.txt" "Mval" "Optimization" "all_cohorts" 20 "Main_analysis/ML_data/"
 
 conda activate tf-py38
 cd /home/aleksandr/Desktop/WORK/Depression_methylation_multicohort_meta
-/home/aleksandr/miniconda3/envs/tf-py38/bin/python TrainCV_ML.py  "LogisticRegr" "test_folder_ML_RAW" 3 \
+/home/aleksandr/miniconda3/envs/tf-py38/bin/python TrainCV_ML_2.py  "LogisticRegr" "test_folder_ML_RAW" 3 \
     "ALL" "Mval" "FINAL_Test" "all_cohorts" 200 "Main_analysis/ML_data_raw/"
 
 conda activate tf-py38
 cd /home/aleksandr/Desktop/WORK/Depression_methylation_multicohort_meta
-/home/aleksandr/miniconda3/envs/tf-py38/bin/python TrainCV_ML.py  "RandomForest" "test_folder_ML" 3 \
-    "Top_200_all_consistent_CpGs.txt" "Mval" "Optimization" "all_cohorts" 200 "Main_analysis/ML_data_/"
+/home/aleksandr/miniconda3/envs/tf-py38/bin/python TrainCV_ML_2.py  "RandomForest" "test_folder_ML" 3 \
+    "Top_200_all_consistent_CpGs.txt" "Mval" "Optimization" "all_cohorts" 200 "Main_analysis/ML_data/"
+
+
+Example commands with selectors:
+
+conda activate tf-py38
+cd /home/aleksandr/Desktop/WORK/Depression_methylation_multicohort_meta
+/home/aleksandr/miniconda3/envs/tf-py38/bin/python TrainCV_ML_2.py  "RandomForest" "test_folder_ML" 3 \
+    "selector_trees_200" "Mval" "Optimization" "all_cohorts" 200 "Main_analysis/ML_data/"
+
+conda activate tf-py38
+cd /home/aleksandr/Desktop/WORK/Depression_methylation_multicohort_meta
+/home/aleksandr/miniconda3/envs/tf-py38/bin/python TrainCV_ML_2.py  "SVM_c" "test_folder_ML" 3 \
+    "selector_variance_5" "Mval" "Optimization" "all_cohorts" 200 "Main_analysis/ML_data/"
 
 """
 
@@ -167,9 +190,36 @@ print("Preparing classifiers")
 LogisticRegr = LogisticRegression(penalty=None,
                                   max_iter=5000)
 
-# SVM-based classification
-SVM_c = svm.SVC(kernel="linear", probability=True)
-SVM_c_RBF = svm.SVC(kernel="rbf", probability=True)
+# SVM-based classification (linear)
+SVM_c = svm.SVC(kernel="linear") # Default model
+SVM_c_1 = svm.SVC(kernel="linear", C=0.01)
+SVM_c_2 = svm.SVC(kernel="linear", C=0.1)
+SVM_c_3 = svm.SVC(kernel="linear", C=1)
+SVM_c_4 = svm.SVC(kernel="linear", C=10)
+SVM_c_5 = svm.SVC(kernel="linear", C=100)
+SVM_c_6 = svm.SVC(kernel="linear", C=1000)
+
+
+# SVM-based classification (RBF)
+SVM_c_RBF = svm.SVC(kernel="rbf") # Default model
+SVM_c_RBF_1 = svm.SVC(kernel="rbf",  C=0.01, gamma = "scale") 
+SVM_c_RBF_2 = svm.SVC(kernel="rbf",  C=0.1, gamma = "scale")
+SVM_c_RBF_3 = svm.SVC(kernel="rbf",  C=1, gamma = "scale")
+SVM_c_RBF_4 = svm.SVC(kernel="rbf",  C=10, gamma = "scale")
+SVM_c_RBF_5 = svm.SVC(kernel="rbf",  C=100, gamma = "scale")
+SVM_c_RBF_6 = svm.SVC(kernel="rbf",  C=1000, gamma = "scale")
+
+SVM_c_RBF_7 = svm.SVC(kernel="rbf",  C=0.01, gamma = "auto") 
+SVM_c_RBF_8 = svm.SVC(kernel="rbf",  C=0.1, gamma = "auto")
+SVM_c_RBF_9 = svm.SVC(kernel="rbf",  C=1, gamma = "auto")
+SVM_c_RBF_10 = svm.SVC(kernel="rbf",  C=10, gamma = "auto")
+SVM_c_RBF_11 = svm.SVC(kernel="rbf",  C=100, gamma = "auto")
+SVM_c_RBF_12 = svm.SVC(kernel="rbf",  C=1000, gamma = "auto")
+
+SVM_c_RBF_13 = svm.SVC(kernel="rbf",  C=1, gamma = 0.015)
+SVM_c_RBF_14 = svm.SVC(kernel="rbf",  C=1, gamma = 0.02)
+SVM_c_RBF_15 = svm.SVC(kernel="rbf",  C=1, gamma = 0.025)
+SVM_c_RBF_16 = svm.SVC(kernel="rbf",  C=1, gamma = 0.03)
 
 # Decision-tree-based classification
 DecisionTree = DecisionTreeClassifier()
@@ -196,26 +246,70 @@ Lasso_classifier = LogisticRegression(penalty='l1',
 # Models to test
 model_list_ML = [
     LogisticRegr,
-    SVM_c,
-    SVM_c_RBF,
     DecisionTree,
     RandomForest,
     AdaBoost,
     Elastic_net_classifier,
     RidgeLogisticRegr,
-    Lasso_classifier
+    Lasso_classifier,
+    SVM_c,
+    SVM_c_1,
+    SVM_c_2,
+    SVM_c_3,
+    SVM_c_4,
+    SVM_c_5,
+    SVM_c_6,
+    SVM_c_RBF,
+    SVM_c_RBF_1,
+    SVM_c_RBF_2,
+    SVM_c_RBF_3,
+    SVM_c_RBF_4,
+    SVM_c_RBF_5,
+    SVM_c_RBF_6,
+    SVM_c_RBF_7,
+    SVM_c_RBF_8,
+    SVM_c_RBF_9,
+    SVM_c_RBF_10,
+    SVM_c_RBF_11,
+    SVM_c_RBF_12,
+    SVM_c_RBF_13,
+    SVM_c_RBF_14,
+    SVM_c_RBF_15,
+    SVM_c_RBF_16
 ]
 
 model_names_ML = [
     "LogisticRegr",
-    "SVM_c",
-    "SVM_c_RBF",
     "DecisionTree",
     "RandomForest",
     "AdaBoost",
     "Elastic_net_classifier",
     "RidgeLogisticRegr",
-    "Lasso_classifier"
+    "Lasso_classifier",
+    "SVM_c",
+    "SVM_c_1",
+    "SVM_c_2",
+    "SVM_c_3",
+    "SVM_c_4",
+    "SVM_c_5",
+    "SVM_c_6",
+    "SVM_c_RBF",
+    "SVM_c_RBF_1",
+    "SVM_c_RBF_2",
+    "SVM_c_RBF_3",
+    "SVM_c_RBF_4",
+    "SVM_c_RBF_5",
+    "SVM_c_RBF_6",
+    "SVM_c_RBF_7",
+    "SVM_c_RBF_8",
+    "SVM_c_RBF_9",
+    "SVM_c_RBF_10",
+    "SVM_c_RBF_11",
+    "SVM_c_RBF_12",
+    "SVM_c_RBF_13",
+    "SVM_c_RBF_14",
+    "SVM_c_RBF_15",
+    "SVM_c_RBF_16"
 ]
 
 
@@ -223,6 +317,21 @@ model_names_ML = [
 classifier_dict = {}
 for i in range(len(model_names_ML)):
     classifier_dict[model_names_ML[i]] = model_list_ML[i]
+
+
+#################################################################################
+##########################    Section    ########################################
+#################################################################################
+# Preparing feature selectors
+selector_dict = {
+    "selector_variance_5":selector_variance_5, 
+    "selector_variance_1":selector_variance_1, 
+    "selector_variance_01":selector_variance_01,
+    "selector_k_best_f_200":selector_k_best_f_200,
+    "selector_lin_svc_200":selector_lin_svc_200, 
+    "selector_log_reg_200":selector_log_reg_200, 
+    "selector_trees_200":selector_trees_200
+}
 
 
 #################################################################################
@@ -247,7 +356,7 @@ def run_ML_model(X_train,
         base_wd = os.getcwd()
         full_path_for_R = base_wd + "/" + dir_path
         full_path_R_script = base_wd + "/HelperScriptsPY/RunLimmaMatrix.R"
-        selection_logical = helper_functions.select_features_R_limma(
+        selection_logical = select_features_R_limma(
             train_methyl = X_train,
             train_pheno = curr_depr_pheno_train,
             CpG_names = CpG_names,
@@ -263,6 +372,20 @@ def run_ML_model(X_train,
 
     elif CONSIST_ARG == "ALL_keep":
         print("All CpGs were imported but no selection requested")
+        
+    elif CONSIST_ARG in selector_dict.keys():
+        base_wd = os.getcwd()
+        full_path_for_R = base_wd + "/" + dir_path
+        selection_logical = selector_dict[CONSIST_ARG](train_methyl=X_train,
+                                                       train_pheno=curr_depr_pheno_train["depr_one_hot"],
+                                                       CpG_names=CpG_names,
+                                                       current_fold=current_fold,
+                                                       base_dir=full_path_for_R)
+        X_train = X_train[:,selection_logical]
+        X_test = X_test[:,selection_logical]
+
+        print(f"Selected training shape: {X_train.shape}")
+        print(f"Selected testing shape: {X_test.shape}")        
 
     else:
         print("CpGs were provided from a list -> no selection with limma")
@@ -278,8 +401,14 @@ def run_ML_model(X_train,
     # train data
     # accuracy train
     classes_train_rounded = model_input.predict(X_train)
-    classes_train = model_input.predict_proba(X_train)[:, 1]
     accuracy_train = accuracy_score(Y_train, classes_train_rounded)
+
+
+    # Exception for SVMs
+    if "SVM_c" in MODEL_ARG:
+        classes_train = model_input.decision_function(X_train)
+    else:
+        classes_train = model_input.predict_proba(X_train)[:, 1]
     
     # Auc train
     auc_train = roc_auc_score(Y_train, classes_train)
@@ -296,9 +425,14 @@ def run_ML_model(X_train,
     gc.collect()
 
     # test data
-    classes_test = model_input.predict_proba(X_test)[:, 1]
     classes_test_rounded = model_input.predict(X_test)
     accuracy_test = accuracy_score(Y_test, classes_test_rounded)
+
+    # Exception for SVMs
+    if "SVM_c" in MODEL_ARG:
+        classes_test = model_input.decision_function(X_test)
+    else:
+        classes_test = model_input.predict_proba(X_test)[:, 1]
 
     # Auc test
     auc_test = roc_auc_score(Y_test, classes_test)
